@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>H&F Ledger</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <header class="app-header">
+    <h1>H&F Ledger</h1>
+    <p>Checking truth • WGO • Pending bills • Locked Down</p>
+  </header>
+
+  <main class="app">
+    <nav class="tabs">
+      <button class="tab active" data-tab="home">Home</button>
+      <button class="tab" data-tab="history">History</button>
+    </nav>
+
+    <!-- HOME -->
+    <section class="page active" id="home">
+      <div class="card">
+        <h2>Balances</h2>
+
+        <div class="balances">
+          <div class="balance">
+            <label>H&F (checking)</label>
+            <input id="bankInput" type="number" step="0.01" />
+            <button id="saveBank">Save</button>
+          </div>
+
+          <div class="balance readonly">
+            <label>Weekly Goings-On (WGO)</label>
+            <div id="wgoDisplay">$0.00</div>
+            <input id="wgoTopup" type="number" step="0.01" placeholder="Top-up amount" />
+            <button id="addWgo">Top up WGO</button>
+            <button class="ghost" id="clearWgo">Clear WGO</button>
+          </div>
+
+          <div class="balance readonly">
+            <label>Locked Down (LD)</label>
+            <div id="ldDisplay">$0.00</div>
+            <input id="ldInput" type="number" step="0.01" placeholder="Lock amount" />
+            <button id="addLd">Lock funds</button>
+            <button class="ghost" id="clearLd">Clear LD</button>
+          </div>
+        </div>
+
+        <div class="metrics">
+          <div>
+            <label>Pending bills</label>
+            <div id="pendingTotal">$0.00</div>
+          </div>
+          <div>
+            <label>Status</label>
+            <div id="status">Ready</div>
+          </div>
+        </div>
+
+        <hr />
+
+        <h3>Add deposit</h3>
+        <input id="depositAmt" type="number" step="0.01" placeholder="Amount" />
+        <input id="depositNote" placeholder="Note (optional)" />
+        <button id="addDeposit">Add deposit</button>
+
+        <hr />
+
+        <h3>Log debit</h3>
+        <select id="debitSource">
+          <option value="checking">Checking (bill / non-weekly)</option>
+          <option value="wgo">WGO (weekly spending)</option>
+        </select>
+        <input id="debitAmt" type="number" step="0.01" placeholder="Amount" />
+        <input id="debitNote" placeholder="Note (optional)" />
+        <button id="addDebit">Add debit</button>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="page" id="history">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h2>History</h2>
+          <button class="ghost" id="clearHistory">Clear history</button>
+        </div>
+        <div id="historyList"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
