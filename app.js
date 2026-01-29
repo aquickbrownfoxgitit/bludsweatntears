@@ -1,9 +1,21 @@
-const STORE_KEY = "hf-ledger-clean";
+/* =========================
+   H&F Ledger — app.js
+   Patched Version
+   ========================= */
+
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => `$${Number(n).toFixed(2)}`;
+const num = (v) => Number(v) || 0;
+
+/* ---------- Storage ---------- */
+
+const STORE_KEY = "hf-ledger-v1";
 
 const store = {
-  checking: 0,
-  locked: 0,
-  history: []
+  bank: 0,
+  wgo: 0,
+  ld: 0,
+  entries: []
 };
 
 function save() {
@@ -15,97 +27,199 @@ function load() {
   if (data) Object.assign(store, data);
 }
 
-function fmt(n) {
-  return `$${Number(n).toFixed(2)}`;
+/* ---------- Ledger helpers ---------- */
+
+function addEntry(entry) {
+  store.entries.push({
+    id: crypto.randomUUID(),
+    ts: new Date().toISOString(),
+    cleared: false,
+    ...entry
+  });
 }
 
-function refresh() {
-  document.getElementById("checkingDisplay").textContent = fmt(store.checking);
-  document.getElementById("ldDisplay").textContent = fmt(store.locked);
-  renderHistory();
+/* ---------- Derived values ---------- */
+
+function pendingTotal() {
+  return store.entries
+    .filter(e => e.type === "bill" && !e.cleared)
+    .reduce((s, e) => s + e.amount, 0);
+}
+
+/* ---------- Render ---------- */
+
+function refreshHome() {
+  $("bankInput").value = store.bank.toFixed(2);
+  $("wgoDisplay").textContent = fmt(store.wgo);
+  $("ldDisplay").textContent = fmt(store.ld);
+  $("pendingTotal").textContent = fmt(pendingTotal());
+  $("status").textContent = store.bank < 0 ? "Over-allocated" : "Ready";
   save();
 }
 
-function addEntry(type, amount, note) {
-  const entry = {
-    id: crypto.randomUUID(),
-    type,
-    amount,
-    note,
-    ts: new Date().toISOString()
-  };
-
-  // Apply financial effect
-  if (type === "bill") {
-    store.checking -= amount;
-  }
-  if (type === "transfer") {
-    store.checking -= amount;
-    store.locked += amount;
-  }
-
-  store.history.unshift(entry);
-  refresh();
-}
-
-function deleteEntry(id) {
-  const idx = store.history.findIndex(e => e.id === id);
-  if (idx === -1) return;
-
-  const entry = store.history[idx];
-
-  // Reverse financial effect
-  if (entry.type === "bill") {
-    store.checking += entry.amount;
-  }
-  if (entry.type === "transfer") {
-    store.checking += entry.amount;
-    store.locked -= entry.amount;
-  }
-
-  store.history.splice(idx, 1);
-  refresh();
-}
-
 function renderHistory() {
-  const list = document.getElementById("historyList");
+  const list = $("historyList");
   list.innerHTML = "";
 
-  store.history.forEach(e => {
+  store.entries.slice().reverse().forEach(e => {
     const row = document.createElement("div");
-    row.className = "history-item";
+    row.className = "history-item" + (e.cleared ? " cleared" : "");
 
     const label =
-      e.type === "bill" ? "Bill / Spending" :
-      e.type === "transfer" ? "Transfer → Locked Down" : "Entry";
+      e.type === "deposit" ? "Deposit" :
+      e.type === "bill" ? "Bill (checking)" :
+      e.type === "wgo" ? "WGO spend" :
+      e.type === "wgo_topup" ? "WGO top-up" :
+      e.type === "transfer" ? "Transfer → Locked Down" :
+      e.type === "ld" ? "Locked Down" : "Entry";
 
-    const text = document.createElement("div");
-    text.className = "history-text";
-    text.innerHTML = `<strong>${label}</strong> — ${fmt(e.amount)}<br><span style="color:#6b7c7c">${e.note || ""}</span>`;
+    row.innerHTML = `
+      <div>
+        <strong>${label}</strong> — ${fmt(e.amount)}
+        ${e.note ? `<div class="tiny">${e.note}</div>` : ""}
+      </div>
+      <div>
+        ${e.type === "bill" ? `<button class="ghost btnClear">${e.cleared ? "Unclear" : "Mark cleared"}</button>` : ""}
+        <button class="ghost btnDelete">Delete</button>
+      </div>
+    `;
 
-    const del = document.createElement("button");
-    del.className = "delete-btn";
-    del.textContent = "Delete";
-    del.onclick = () => deleteEntry(e.id);
+    const btn = row.querySelector(".btnClear");
+    if (btn) {
+      btn.onclick = () => {
+        e.cleared = !e.cleared;
+        refreshHome();
+        renderHistory();
+      };
+    }
 
-    row.appendChild(text);
-    row.appendChild(del);
+    const delBtn = row.querySelector(".btnDelete");
+    delBtn.onclick = () => {
+      // Reverse financial impact
+      if (e.type === "bill") store.bank += e.amount;
+      if (e.type === "wgo") store.wgo += e.amount;
+      if (e.type === "transfer") {
+        store.bank += e.amount;
+        store.ld -= e.amount;
+      }
+      if (e.type === "wgo_topup") {
+        store.bank += e.amount;
+        store.wgo -= e.amount;
+      }
+      if (e.type === "ld") {
+        store.bank += e.amount;
+        store.ld -= e.amount;
+      }
+      if (e.type === "deposit") {
+        store.bank -= e.amount;
+      }
+
+      store.entries = store.entries.filter(x => x.id !== e.id);
+      refreshHome();
+      renderHistory();
+    };
+
     list.appendChild(row);
   });
 }
 
-document.getElementById("addDebit").onclick = () => {
-  const amt = Number(document.getElementById("debitAmount").value);
-  const type = document.getElementById("debitType").value;
-  const note = document.getElementById("debitNote").value;
+/* ---------- Actions ---------- */
 
-  if (!amt || amt <= 0) return;
-
-  addEntry(type, amt, note);
-
-  document.getElementById("debitAmount").value = "";
-  document.getElementById("debitNote").value = "";
+/* Save checking balance */
+$("saveBank").onclick = () => {
+  store.bank = num($("bankInput").value);
+  refreshHome();
 };
 
+/* Deposit */
+$("addDeposit")?.addEventListener("click", () => {
+  const amt = num($("depositAmt").value);
+  if (!amt) return;
+  store.bank += amt;
+  addEntry({ type: "deposit", amount: amt, note: $("depositNote").value });
+  $("depositAmt").value = "";
+  $("depositNote").value = "";
+  refreshHome();
+  renderHistory();
+});
+
+/* WGO top-up */
+$("addWgo").onclick = () => {
+  const amt = num($("wgoTopup").value);
+  if (!amt) return;
+  store.bank -= amt;
+  store.wgo += amt;
+  addEntry({ type: "wgo_topup", amount: amt });
+  $("wgoTopup").value = "";
+  refreshHome();
+  renderHistory();
+};
+
+$("clearWgo").onclick = () => {
+  store.wgo = 0;
+  refreshHome();
+};
+
+/* Locked Down direct lock */
+$("addLd").onclick = () => {
+  const amt = num($("ldInput").value);
+  if (!amt) return;
+  store.bank -= amt;
+  store.ld += amt;
+  addEntry({ type: "ld", amount: amt });
+  $("ldInput").value = "";
+  refreshHome();
+  renderHistory();
+};
+
+$("clearLd").onclick = () => {
+  store.ld = 0;
+  refreshHome();
+};
+
+/* Log Debit: Checking, WGO, or Transfer */
+$("addDebit").onclick = () => {
+  const source = $("debitSource").value;
+  const amt = num($("debitAmt").value);
+  if (!amt) return;
+
+  const note = $("debitNote").value;
+
+  if (source === "checking") {
+    store.bank -= amt;
+    addEntry({ type: "bill", amount: amt, note });
+  }
+
+  if (source === "wgo") {
+    store.wgo -= amt;
+    addEntry({ type: "wgo", amount: amt, note });
+  }
+
+  if (source === "transfer") {
+    store.bank -= amt;
+    store.ld += amt;
+    addEntry({ type: "transfer", amount: amt, note });
+  }
+
+  $("debitAmt").value = "";
+  $("debitNote").value = "";
+  refreshHome();
+  renderHistory();
+};
+
+/* ---------- Tabs ---------- */
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.tab).classList.add("active");
+  };
+});
+
+/* ---------- Boot ---------- */
+
 load();
-refresh();
+refreshHome();
+renderHistory();
