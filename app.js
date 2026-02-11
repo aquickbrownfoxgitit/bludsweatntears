@@ -190,16 +190,20 @@ $("addDebit").onclick = () => {
     addEntry({ type: "bill", amount: amt, note });
   }
 
-  if (source === "wgo") {
-    store.wgo -= amt;
-    addEntry({ type: "wgo", amount: amt, note });
-  }
+if (source === "wgo") {
+  store.wgo -= amt;
+  addEntry({ type: "wgo", amount: amt, note });
 
-  if (source === "transfer") {
-    store.bank -= amt;
-    store.ld += amt;
-    addEntry({ type: "transfer", amount: amt, note });
-  }
+} else if (source === "transfer") {
+  store.bank -= amt;
+  store.ld += amt;
+  addEntry({ type: "transfer", amount: amt, note });
+
+} else if (source === "lockdown") {
+  store.ld -= amt;
+  addEntry({ type: "lockdown", amount: amt, note });
+}
+
 
   $("debitAmt").value = "";
   $("debitNote").value = "";
@@ -223,3 +227,4 @@ document.querySelectorAll(".tab").forEach(btn => {
 load();
 refreshHome();
 renderHistory();
+
