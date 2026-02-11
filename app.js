@@ -1,6 +1,6 @@
 /* =========================
    H&F Ledger — app.js
-   Patched Version
+   Clean Rebuild
    ========================= */
 
 const $ = (id) => document.getElementById(id);
@@ -9,7 +9,7 @@ const num = (v) => Number(v) || 0;
 
 /* ---------- Storage ---------- */
 
-const STORE_KEY = "hf-ledger-v1";
+const STORE_KEY = "hf-ledger-v2";
 
 const store = {
   bank: 0,
@@ -38,7 +38,7 @@ function addEntry(entry) {
   });
 }
 
-/* ---------- Derived values ---------- */
+/* ---------- Derived ---------- */
 
 function pendingTotal() {
   return store.entries
@@ -62,6 +62,7 @@ function renderHistory() {
   list.innerHTML = "";
 
   store.entries.slice().reverse().forEach(e => {
+
     const row = document.createElement("div");
     row.className = "history-item" + (e.cleared ? " cleared" : "");
 
@@ -70,8 +71,9 @@ function renderHistory() {
       e.type === "bill" ? "Bill (checking)" :
       e.type === "wgo" ? "WGO spend" :
       e.type === "wgo_topup" ? "WGO top-up" :
-      e.type === "transfer" ? "Transfer → Locked Down" :
-      e.type === "ld" ? "Locked Down" : "Entry";
+      e.type === "transfer" ? "Fund Lockdown (Bills)" :
+      e.type === "lockdown" ? "Lockdown (bill cleared)" :
+      "Entry";
 
     row.innerHTML = `
       <div>
@@ -84,37 +86,48 @@ function renderHistory() {
       </div>
     `;
 
-    const btn = row.querySelector(".btnClear");
-    if (btn) {
-      btn.onclick = () => {
+    /* Clear button (checking bills only) */
+    const btnClear = row.querySelector(".btnClear");
+    if (btnClear) {
+      btnClear.onclick = () => {
         e.cleared = !e.cleared;
         refreshHome();
         renderHistory();
       };
     }
 
-    const delBtn = row.querySelector(".btnDelete");
-    delBtn.onclick = () => {
-      // Reverse financial impact
-      if (e.type === "bill") store.bank += e.amount;
-      if (e.type === "wgo") store.wgo += e.amount;
-      if (e.type === "transfer") {
+    /* Delete logic (fully symmetrical) */
+    const btnDelete = row.querySelector(".btnDelete");
+    btnDelete.onclick = () => {
+
+      if (e.type === "bill") {
+        store.bank += e.amount;
+      }
+
+      else if (e.type === "wgo") {
+        store.wgo += e.amount;
+      }
+
+      else if (e.type === "transfer") {
         store.bank += e.amount;
         store.ld -= e.amount;
       }
-      if (e.type === "wgo_topup") {
+
+      else if (e.type === "wgo_topup") {
         store.bank += e.amount;
         store.wgo -= e.amount;
       }
-      if (e.type === "ld") {
-        store.bank += e.amount;
-        store.ld -= e.amount;
+
+      else if (e.type === "lockdown") {
+        store.ld += e.amount;
       }
-      if (e.type === "deposit") {
+
+      else if (e.type === "deposit") {
         store.bank -= e.amount;
       }
 
       store.entries = store.entries.filter(x => x.id !== e.id);
+
       refreshHome();
       renderHistory();
     };
@@ -135,10 +148,13 @@ $("saveBank").onclick = () => {
 $("addDeposit")?.addEventListener("click", () => {
   const amt = num($("depositAmt").value);
   if (!amt) return;
+
   store.bank += amt;
   addEntry({ type: "deposit", amount: amt, note: $("depositNote").value });
+
   $("depositAmt").value = "";
   $("depositNote").value = "";
+
   refreshHome();
   renderHistory();
 });
@@ -147,10 +163,14 @@ $("addDeposit")?.addEventListener("click", () => {
 $("addWgo").onclick = () => {
   const amt = num($("wgoTopup").value);
   if (!amt) return;
+
   store.bank -= amt;
   store.wgo += amt;
+
   addEntry({ type: "wgo_topup", amount: amt });
+
   $("wgoTopup").value = "";
+
   refreshHome();
   renderHistory();
 };
@@ -160,14 +180,18 @@ $("clearWgo").onclick = () => {
   refreshHome();
 };
 
-/* Locked Down direct lock */
+/* Fund Lockdown */
 $("addLd").onclick = () => {
   const amt = num($("ldInput").value);
   if (!amt) return;
+
   store.bank -= amt;
   store.ld += amt;
-  addEntry({ type: "ld", amount: amt });
+
+  addEntry({ type: "transfer", amount: amt });
+
   $("ldInput").value = "";
+
   refreshHome();
   renderHistory();
 };
@@ -177,7 +201,7 @@ $("clearLd").onclick = () => {
   refreshHome();
 };
 
-/* Log Debit: Checking, WGO, or Transfer */
+/* Log Debit */
 $("addDebit").onclick = () => {
   const source = $("debitSource").value;
   const amt = num($("debitAmt").value);
@@ -190,23 +214,25 @@ $("addDebit").onclick = () => {
     addEntry({ type: "bill", amount: amt, note });
   }
 
-if (source === "wgo") {
-  store.wgo -= amt;
-  addEntry({ type: "wgo", amount: amt, note });
+  else if (source === "wgo") {
+    store.wgo -= amt;
+    addEntry({ type: "wgo", amount: amt, note });
+  }
 
-} else if (source === "transfer") {
-  store.bank -= amt;
-  store.ld += amt;
-  addEntry({ type: "transfer", amount: amt, note });
+  else if (source === "transfer") {
+    store.bank -= amt;
+    store.ld += amt;
+    addEntry({ type: "transfer", amount: amt, note });
+  }
 
-} else if (source === "lockdown") {
-  store.ld -= amt;
-  addEntry({ type: "lockdown", amount: amt, note });
-}
-
+  else if (source === "lockdown") {
+    store.ld -= amt;
+    addEntry({ type: "lockdown", amount: amt, note });
+  }
 
   $("debitAmt").value = "";
   $("debitNote").value = "";
+
   refreshHome();
   renderHistory();
 };
@@ -227,4 +253,3 @@ document.querySelectorAll(".tab").forEach(btn => {
 load();
 refreshHome();
 renderHistory();
-
