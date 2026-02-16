@@ -1,6 +1,6 @@
 /* =========================
    H&F Ledger — app.js
-   Clean Rebuild
+   Clean Rebuild + Fixes
    ========================= */
 
 const $ = (id) => document.getElementById(id);
@@ -17,6 +17,8 @@ const store = {
   ld: 0,
   entries: []
 };
+
+let historyCleared = false;
 
 function save() {
   localStorage.setItem(STORE_KEY, JSON.stringify(store));
@@ -58,8 +60,11 @@ function refreshHome() {
 }
 
 function renderHistory() {
+
   const list = $("historyList");
   list.innerHTML = "";
+
+  if (historyCleared) return;
 
   store.entries.slice().reverse().forEach(e => {
 
@@ -86,7 +91,6 @@ function renderHistory() {
       </div>
     `;
 
-    /* Clear button (checking bills only) */
     const btnClear = row.querySelector(".btnClear");
     if (btnClear) {
       btnClear.onclick = () => {
@@ -96,35 +100,15 @@ function renderHistory() {
       };
     }
 
-    /* Delete logic (fully symmetrical) */
     const btnDelete = row.querySelector(".btnDelete");
     btnDelete.onclick = () => {
 
-      if (e.type === "bill") {
-        store.bank += e.amount;
-      }
-
-      else if (e.type === "wgo") {
-        store.wgo += e.amount;
-      }
-
-      else if (e.type === "transfer") {
-        store.bank += e.amount;
-        store.ld -= e.amount;
-      }
-
-      else if (e.type === "wgo_topup") {
-        store.bank += e.amount;
-        store.wgo -= e.amount;
-      }
-
-      else if (e.type === "lockdown") {
-        store.ld += e.amount;
-      }
-
-      else if (e.type === "deposit") {
-        store.bank -= e.amount;
-      }
+      if (e.type === "bill") store.bank += e.amount;
+      else if (e.type === "wgo") store.wgo += e.amount;
+      else if (e.type === "transfer") { store.bank += e.amount; store.ld -= e.amount; }
+      else if (e.type === "wgo_topup") { store.bank += e.amount; store.wgo -= e.amount; }
+      else if (e.type === "lockdown") store.ld += e.amount;
+      else if (e.type === "deposit") store.bank -= e.amount;
 
       store.entries = store.entries.filter(x => x.id !== e.id);
 
@@ -136,15 +120,20 @@ function renderHistory() {
   });
 }
 
+/* ---------- Clear History (Visual Only) ---------- */
+
+$("clearHistory").onclick = () => {
+  historyCleared = true;
+  renderHistory();
+};
+
 /* ---------- Actions ---------- */
 
-/* Save checking balance */
 $("saveBank").onclick = () => {
   store.bank = num($("bankInput").value);
   refreshHome();
 };
 
-/* Deposit */
 $("addDeposit")?.addEventListener("click", () => {
   const amt = num($("depositAmt").value);
   if (!amt) return;
@@ -155,11 +144,11 @@ $("addDeposit")?.addEventListener("click", () => {
   $("depositAmt").value = "";
   $("depositNote").value = "";
 
+  historyCleared = false;
   refreshHome();
   renderHistory();
 });
 
-/* WGO top-up */
 $("addWgo").onclick = () => {
   const amt = num($("wgoTopup").value);
   if (!amt) return;
@@ -171,16 +160,11 @@ $("addWgo").onclick = () => {
 
   $("wgoTopup").value = "";
 
+  historyCleared = false;
   refreshHome();
   renderHistory();
 };
 
-$("clearWgo").onclick = () => {
-  store.wgo = 0;
-  refreshHome();
-};
-
-/* Fund Lockdown */
 $("addLd").onclick = () => {
   const amt = num($("ldInput").value);
   if (!amt) return;
@@ -192,16 +176,11 @@ $("addLd").onclick = () => {
 
   $("ldInput").value = "";
 
+  historyCleared = false;
   refreshHome();
   renderHistory();
 };
 
-$("clearLd").onclick = () => {
-  store.ld = 0;
-  refreshHome();
-};
-
-/* Log Debit */
 $("addDebit").onclick = () => {
   const source = $("debitSource").value;
   const amt = num($("debitAmt").value);
@@ -213,18 +192,15 @@ $("addDebit").onclick = () => {
     store.bank -= amt;
     addEntry({ type: "bill", amount: amt, note });
   }
-
   else if (source === "wgo") {
     store.wgo -= amt;
     addEntry({ type: "wgo", amount: amt, note });
   }
-
   else if (source === "transfer") {
     store.bank -= amt;
     store.ld += amt;
     addEntry({ type: "transfer", amount: amt, note });
   }
-
   else if (source === "lockdown") {
     store.ld -= amt;
     addEntry({ type: "lockdown", amount: amt, note });
@@ -233,6 +209,7 @@ $("addDebit").onclick = () => {
   $("debitAmt").value = "";
   $("debitNote").value = "";
 
+  historyCleared = false;
   refreshHome();
   renderHistory();
 };
@@ -245,6 +222,11 @@ document.querySelectorAll(".tab").forEach(btn => {
     document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById(btn.dataset.tab).classList.add("active");
+
+    if (btn.dataset.tab === "history") {
+      historyCleared = false;
+      renderHistory();
+    }
   };
 });
 
